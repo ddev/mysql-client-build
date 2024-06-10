@@ -51,7 +51,10 @@ jobs:
 
       - name: "Tar up the binaries"
         run: |
-          tar -C ./mysql_${{ matrix.dbversion }}/built_${{ matrix.dbversion }}_${{ matrix.arch }}/bin/ -czf ./mysql-${{ matrix.dbversion }}-${{ matrix.arch }}.tar.gz .
+          MYSQL_VERSION="${{ matrix.dbversion }}"
+          # Remove the patch version from the tarball name
+          MINOR_MYSQL_VERSION=${MYSQL_VERSION%.*}
+          tar -C ./mysql_${{ matrix.dbversion }}/built_${{ matrix.dbversion }}_${{ matrix.arch }}/bin/ -czf ./mysql-${MINOR_MYSQL_VERSION}-${{ matrix.arch }}.tar.gz .
 
       - name: "upload mysql-${{ matrix.dbversion }}-${{ matrix.arch }}"
         uses: actions/upload-artifact@v4
@@ -89,11 +92,3 @@ jobs:
       - name: Setup tmate session
         if: ${{ failure() }}
         uses: mxschmitt/action-tmate@v3
-
-#      - name: Upload Release Assets
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#        run: |
-#          for file in $(find ./artifacts -type f); do
-#            gh release upload "${{ github.ref }}" "$file" --clobber
-#          done
