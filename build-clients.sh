@@ -52,7 +52,7 @@ echo "Architecture: ${ARCH}"
 
 set -x
 
-docker pull randyfay/cmake
+docker pull ddev/mysql-client-build
 
 if [ ! -d mysql_${MYSQL_VERSION} ]; then
   curl -L --fail -o /tmp/mysql.tgz https://dev.mysql.com/get/Downloads/MySQL-${MYSQL_VERSION%.?}/mysql-${MYSQL_VERSION}.tar.gz
@@ -61,7 +61,7 @@ if [ ! -d mysql_${MYSQL_VERSION} ]; then
 fi
 pushd mysql_${MYSQL_VERSION}
 echo "Building ${ARCH} for mysql ${MYSQL_VERSION}"
-docker run --rm --platform=linux/${ARCH} -e MYSQL_VERSION=${MYSQL_VERSION} -e ARCH=${ARCH} -v .:/src randyfay/cmake
+docker run --rm --platform=linux/${ARCH} -e MYSQL_VERSION=${MYSQL_VERSION} -e ARCH=${ARCH} -v .:/src ddev/mysql-client-build
 
 popd
 

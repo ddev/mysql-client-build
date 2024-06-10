@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -eu -o pipefail
-DOCKER_IMAGE=randyfay/cmake
+DOCKER_IMAGE=ddev/mysql-client-build
 
 docker buildx create --name cmake --use 2>/dev/null || true
 
