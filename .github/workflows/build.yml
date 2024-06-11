@@ -54,7 +54,7 @@ jobs:
           MYSQL_VERSION="${{ matrix.dbversion }}"
           # Remove the patch version from the tarball name
           MINOR_MYSQL_VERSION=${MYSQL_VERSION%.*}
-          tar -C ./mysql_${{ matrix.dbversion }}/built_${{ matrix.dbversion }}_${{ matrix.arch }}/bin/ -czf ./mysql-${MINOR_MYSQL_VERSION}-${{ matrix.arch }}.tar.gz .
+          tar -C ./mysql_${{ matrix.dbversion }}/built_${{ matrix.dbversion }}_${{ matrix.arch }}/bin/ -czf ./mysql-${MINOR_MYSQL_VERSION}-${{ matrix.arch }}.tar.gz mysql mysqldump
 
       - name: "upload mysql-${{ matrix.dbversion }}-${{ matrix.arch }}"
         uses: actions/upload-artifact@v4
