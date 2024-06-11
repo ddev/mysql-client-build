@@ -60,7 +60,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mysql-${{ matrix.dbversion }}-${{ matrix.arch }}
-          path: "./mysql-${{ matrix.dbversion }}-${{ matrix.arch }}.tar.gz"
+          path: ./mysql-*-${{ matrix.arch }}.tar.gz
 
 #      - name: Setup tmate session
 #        if: ${{ failure() }}
@@ -80,7 +80,7 @@ jobs:
           path: ./artifacts
 
       - name: Show content of ./artifacts
-        run: ls -lR ./artifacts
+        run: ls -lR ./artifacts || true
 
       - name: Add files to release
         uses: softprops/action-gh-release@v2
