@@ -14,24 +14,22 @@ See [issue](https://github.com/ddev/ddev/issues/6083).
 
 ## Instructions
 
-### Running the build script
-
-The build script is `build-clients.sh` and it can be run with something like:
-
-`./build-clients.sh --mysql-version 5.7.44 --arch amd64`
-
 ### When to build
 
 Luckily, this doesn't have to be built too terribly often. Mostly it's only when we have a new mysql server version to deploy.
 
 ### Building with GitHub Release
 
-Every push builds a set of files that are available on the test page.
+The normal way to update this is to update the list of versions in the `build.yml` and then create a new release. 
 
-But mostly a new release will create a set of tarballs for each version and architecture.
+Update the list of versions to be built in the [`strategy` stanza](https://github.com/ddev/mysql-client-build/blob/6f94f620dcb28607cc71fe78e6a25f70213f8293/.github/workflows/build.yml#L26-L29) of .github/workflows/build.yml
 
-You can update the list of versions to be built in the [`strategy` stanza](https://github.com/ddev/mysql-client-build/blob/6f94f620dcb28607cc71fe78e6a25f70213f8293/.github/workflows/build.yml#L26-L29) of .github/workflows/build.yml
 
+### Running the build script manually
+
+The build script is `build-clients.sh` and it can be run with something like:
+
+`./build-clients.sh --mysql-version 5.7.44 --arch amd64`
 
 ### Building and pushing the image to Docker Hub
 
