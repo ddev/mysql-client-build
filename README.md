@@ -30,10 +30,10 @@ Every push builds a set of files that are available on the test page.
 
 But mostly a new release will create a set of tarballs for each version and architecture.
 
-You can update the list of versions to be built in the [`strategy` stanza](https://github.com/ddev/mysql-client-build/blob/6f94f620dcb28607cc71fe78e6a25f70213f8293/.github/workflows/build.yml#L26-L29) of .github/workflows/tests.yaml
+You can update the list of versions to be built in the [`strategy` stanza](https://github.com/ddev/mysql-client-build/blob/6f94f620dcb28607cc71fe78e6a25f70213f8293/.github/workflows/build.yml#L26-L29) of .github/workflows/build.yml
 
 
-### Building and pushing the imageto Docker Hub
+### Building and pushing the image to Docker Hub
 
 Updating the image is done with the script in image/push.sh:
 
