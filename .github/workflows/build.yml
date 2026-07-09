@@ -22,7 +22,7 @@ env:
 
 jobs:
   tests:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     strategy:
       matrix:
         dbversion: ["5.7.44", "8.0.40", "8.4.3"]
@@ -41,9 +41,6 @@ jobs:
       - name: Run basic docker container
         run: |
           docker run --rm debian:bookworm bash -c 'arch && cat /etc/*release*'
-
-      - name: Set up for multi-arch
-        run: sudo docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 
       - name: Build mysql clients
         run: |
