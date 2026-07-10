@@ -1,4 +1,4 @@
-FROM debian:bookworm
+FROM debian:trixie
 ARG TARGETARCH
 
 # Install dependencies
@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y \
     git \
     libsasl2-dev \
     libssl-dev \
-    libncurses5-dev \
+    libncurses-dev \
     bison \
     pkg-config \
     libtirpc-dev
