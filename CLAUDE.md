@@ -12,28 +12,28 @@ This repo builds the `mysql`/`mysqladmin`/`mysqldump` client binaries that DDEV 
 
 Don't conflate these — they share the repo and the word "build," but run on very different schedules:
 
-- **Job A — the builder image** (`image/Dockerfile` → `ddev/mysql-client-build` on Docker Hub): a Debian Bookworm image with the tools needed to compile the mysql client from source. Changes rarely (a Debian version bump, a new build dependency). Updated via `image/push.sh` (manual) or `.github/workflows/push-tagged-image.yml` (`workflow_dispatch`, native per-arch runners + multi-arch manifest merge).
-- **Job B — building the mysql clients** (`.github/workflows/build.yml` + `build-clients.sh` + `image/build-mysql-clients.sh`): the actual product. Pulls whatever Job A's image currently is, compiles specific mysql versions inside it, tars up `mysql`/`mysqladmin`/`mysqldump`, and (on a tag push) attaches them to a GitHub Release. Changes often — whenever a mysql server version DDEV supports needs a matching client.
+- **Primary Job — building the mysql clients** (`.github/workflows/build.yml` + `build-clients.sh` + `image/build-mysql-clients.sh`): the actual product. Pulls whatever the Secondary Job's image currently is, compiles specific mysql versions inside it, tars up `mysql`/`mysqladmin`/`mysqldump`, and (on a tag push) attaches them to a GitHub Release. Changes often — whenever a mysql server version DDEV supports needs a matching client.
+- **Secondary Job — the builder image** (`image/Dockerfile` → `ddev/mysql-client-build` on Docker Hub): a Debian image with the tools needed to compile the mysql client from source. Changes rarely (a Debian version bump, a new build dependency). Updated via `image/push.sh` (manual) or `.github/workflows/push-tagged-image.yml` (`workflow_dispatch`, native per-arch runners + multi-arch manifest merge).
 
-Job B always pulls `ddev/mysql-client-build:latest`, so a Job A change can alter Job B's output with no Job B code change. Keep this distinction in mind when diagnosing an unexpected build result.
+The Primary Job always pulls `ddev/mysql-client-build:latest`, so a Secondary Job change can alter the Primary Job's output with no Primary Job code change. Keep this distinction in mind when diagnosing an unexpected build result.
 
 ## Key Files
 
-- `image/Dockerfile` — Job A: the builder image definition (`FROM debian:bookworm`, intentionally — see "Known Open Questions" below)
+- `.github/workflows/build.yml` — Primary Job: the `dbversion`/`arch` test matrix, plus the tag-triggered `release` job
+- `build-clients.sh` — top-level script: downloads mysql source, runs it through the Secondary Job's image
+- `image/Dockerfile` — Secondary Job: the builder image definition (currently `FROM debian:bookworm` — this is overdue for a bump to `debian:trixie`, see "Known Issues" below)
 - `image/build-mysql-clients.sh` — the cmake/make invocation run inside the builder image
-- `image/push.sh` — manual Job A build-and-push script
-- `.github/workflows/push-tagged-image.yml` — CI Job A push (`workflow_dispatch`)
-- `build-clients.sh` — top-level script: downloads mysql source, runs it through the Job A image
-- `.github/workflows/build.yml` — Job B: the `dbversion`/`arch` test matrix, plus the tag-triggered `release` job
+- `image/push.sh` — manual Secondary Job build-and-push script
+- `.github/workflows/push-tagged-image.yml` — CI Secondary Job push (`workflow_dispatch`)
 - `README.md` — the full human-facing explanation of both jobs and how ddev-webserver consumes the output
 
 ## Development Commands
 
 ```bash
-# Build a single mysql version/arch locally (Job B, outside CI)
+# Build a single mysql version/arch locally (Primary Job, outside CI)
 ./build-clients.sh --mysql-version 8.0.46 --arch amd64
 
-# Rebuild and push the builder image (Job A, outside CI)
+# Rebuild and push the builder image (Secondary Job, outside CI)
 cd image && ./push.sh
 ```
 
@@ -53,14 +53,14 @@ cd image && ./push.sh
   git fetch upstream && git checkout -b <branch_name> upstream/main --no-track
   ```
 
-- `.github/PULL_REQUEST_TEMPLATE.md` asks which pipeline (Job A / Job B / Other) a PR touches — fill that in.
+- `.github/PULL_REQUEST_TEMPLATE.md` asks which pipeline (Primary Job / Secondary Job / Other) a PR touches — fill that in.
 
 ## Versioning
 
 - mysql client versions are tracked in `build.yml`'s `dbversion` matrix; tarballs are named by minor version only (e.g. `mysql-8.0-amd64.tar.gz`), so a patch-version bump doesn't change the tarball name.
 - Release tags follow `vX.Y.Z` (e.g. `v0.2.5`).
-- Consuming side: `ddev/ddev`'s `containers/ddev-webserver/.../mysql-client-install.sh` pins a specific release tag via `TARBALL_VERSION`. Bumping the mysql client version consumed by DDEV requires a change in **both** repos: a Job B update + release here, then a `TARBALL_VERSION` bump in `ddev/ddev`.
+- Consuming side: `ddev/ddev`'s `containers/ddev-webserver/.../mysql-client-install.sh` pins a specific release tag via `TARBALL_VERSION`. Bumping the mysql client version consumed by DDEV requires a change in **both** repos: a Primary Job update + release here, then a `TARBALL_VERSION` bump in `ddev/ddev`.
 
-## Known Open Questions
+## Known Issues
 
-- The builder image (Job A) stays on Debian Bookworm even though `ddev-webserver` (the deployment target) moved to Debian Trixie. glibc's forward compatibility makes this safe for the client binaries themselves, but whether the other libraries they dynamically link against (`libssl`, `libsasl2`, `libncurses`, `zlib`) stay ABI-compatible from Bookworm into Trixie has not been explicitly verified — it has just worked empirically so far. If `mysql`/`mysqldump` ever fail to start in `ddev-webserver` with a missing- or mismatched-library error, check this first.
+- **The Secondary Job's builder image is overdue for a Debian version bump.** It's still `FROM debian:bookworm`, but `ddev-webserver` (the deployment target) moved to Debian Trixie a while ago — this should have been updated already and hasn't been. glibc's forward compatibility is why it hasn't visibly broken (binaries linked against an older glibc run fine on a newer one), but that's not a reason to leave it on Bookworm. Whether the other libraries the client dynamically links against (`libssl`, `libsasl2`, `libncurses`, `zlib`) stay ABI-compatible from Bookworm into Trixie hasn't been explicitly verified either. Fix: bump `image/Dockerfile` to `debian:trixie`, watching for package name changes (e.g. `libncurses5-dev`).

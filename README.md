@@ -4,15 +4,33 @@ This repo builds the `mysql`/`mysqladmin`/`mysqldump` client binaries that DDEV 
 
 ## How this repo works
 
-There are two separate pipelines here that are easy to conflate — they share the repo, and both involve "building" something, but they run on different schedules and produce different things.
+There are two separate pipelines here that are easy to conflate — they share the repo, and both involve "building" something, but they run on very different schedules.
 
-### Job A: the builder image
+### Primary Job: building the mysql clients
 
-[`image/Dockerfile`](image/Dockerfile) defines a plain Debian image with the tools needed to compile the mysql client from source (`build-essential`, `cmake`, etc.). It's pushed to Docker Hub as `ddev/mysql-client-build:latest` and is a reusable compile *environment* — not something DDEV or end users consume directly.
+[`.github/workflows/build.yml`](.github/workflows/build.yml) is the actual product. For each mysql version/arch in its build matrix, it downloads the mysql source, runs it through the Secondary Job's image (`docker run ... ddev/mysql-client-build`) to compile `mysql`/`mysqladmin`/`mysqldump`, and tars up the resulting binaries. On a tag push, those tarballs are attached to a GitHub Release.
 
-It's deliberately still based on Debian Bookworm, even though `ddev-webserver` itself moved on to Debian Trixie. Binaries linked against an older glibc run fine on a system with an equal-or-newer glibc, so building on the older target and deploying to the newer one is the safe direction — this is not an oversight. What hasn't been explicitly verified is whether the other libraries the client dynamically links against (`libssl`, `libsasl2`, `libncurses`, `zlib`) stay ABI-compatible from Bookworm into Trixie; it has worked in practice, but if `mysql`/`mysqldump` ever fail to start in `ddev-webserver` with a missing- or mismatched-library error, this is the first place to look.
+Because this always pulls whatever `ddev/mysql-client-build:latest` currently is, a Secondary Job change can alter the Primary Job's output even without any Primary Job code change.
 
-This image changes rarely — mainly when the build environment itself needs something new (a Debian version bump, an added build dependency), not as part of routine maintenance. To update it:
+This is the pipeline that changes often — whenever a mysql server version DDEV supports needs a matching (or updated) client. To update it:
+
+1. Edit the `dbversion` list in `build.yml`'s `strategy` matrix.
+2. Push and confirm the `tests` jobs pass for every version/arch.
+3. Tag a release (e.g. `v0.2.6`) to trigger the `release` job, which publishes the tarballs.
+
+You can also run the build script directly, outside of CI:
+
+```bash
+./build-clients.sh --mysql-version 8.0.46 --arch amd64
+```
+
+### Secondary Job: the builder image
+
+[`image/Dockerfile`](image/Dockerfile) defines a plain Debian image with the tools needed to compile the mysql client from source (`build-essential`, `cmake`, etc.). It's pushed to Docker Hub as `ddev/mysql-client-build:latest` and is a reusable compile *environment* that the Primary Job depends on — not something DDEV or end users consume directly.
+
+**This needs attention:** it's still based on Debian Bookworm, but `ddev-webserver` itself moved to Debian Trixie a while ago — this image should have been bumped to match by now and hasn't been. It hasn't caused visible problems so far because binaries linked against an older glibc run fine on a system with an equal-or-newer glibc, but that's a reason it hasn't broken yet, not a reason to leave it as-is. Whether the other libraries the client dynamically links against (`libssl`, `libsasl2`, `libncurses`, `zlib`) stay ABI-compatible from Bookworm into Trixie hasn't been explicitly verified either. Bumping `image/Dockerfile` to `debian:trixie` is the fix; watch for package name changes (e.g. `libncurses5-dev` may not exist the same way on Trixie).
+
+This image otherwise changes rarely — mainly when the build environment itself needs something new (a Debian version bump like the one above, an added build dependency), not as part of routine maintenance. To update it:
 
 ```bash
 cd image
@@ -27,32 +45,14 @@ To poke around inside the builder image itself (e.g. while debugging a build fai
 docker run -it --rm ddev/mysql-client-build bash
 ```
 
-### Job B: building the mysql clients
-
-[`.github/workflows/build.yml`](.github/workflows/build.yml) is the actual product. For each mysql version/arch in its build matrix, it downloads the mysql source, runs it through the Job A image (`docker run ... ddev/mysql-client-build`) to compile `mysql`/`mysqladmin`/`mysqldump`, and tars up the resulting binaries. On a tag push, those tarballs are attached to a GitHub Release.
-
-Because this always pulls whatever `ddev/mysql-client-build:latest` currently is, a Job A change can alter Job B's output even without any Job B code change.
-
-This is the pipeline that changes often — whenever a mysql server version DDEV supports needs a matching (or updated) client. To update it:
-
-1. Edit the `dbversion` list in `build.yml`'s `strategy` matrix.
-2. Push and confirm the `tests` jobs pass for every version/arch.
-3. Tag a release (e.g. `v0.2.6`) to trigger the `release` job, which publishes the tarballs.
-
-You can also run the build script directly, outside of CI:
-
-```bash
-./build-clients.sh --mysql-version 8.0.46 --arch amd64
-```
-
 ## Consumption
 
-`ddev-webserver`'s [`mysql-client-install.sh`](https://github.com/ddev/ddev/blob/main/containers/ddev-webserver/ddev-webserver-base-files/usr/local/bin/mysql-client-install.sh) downloads a release tarball keyed by mysql major.minor version (e.g. `mysql-8.0-amd64.tar.gz`) from this repo's [Releases](https://github.com/ddev/mysql-client-build/releases), pinned via a `TARBALL_VERSION` tag in that script. Bumping the mysql client version consumed by DDEV means: do a Job B update here, cut a release, then update `TARBALL_VERSION` in `ddev/ddev`.
+`ddev-webserver`'s [`mysql-client-install.sh`](https://github.com/ddev/ddev/blob/main/containers/ddev-webserver/ddev-webserver-base-files/usr/local/bin/mysql-client-install.sh) downloads a release tarball keyed by mysql major.minor version (e.g. `mysql-8.0-amd64.tar.gz`) from this repo's [Releases](https://github.com/ddev/mysql-client-build/releases), pinned via a `TARBALL_VERSION` tag in that script. Bumping the mysql client version consumed by DDEV means: do a Primary Job update here, cut a release, then update `TARBALL_VERSION` in `ddev/ddev`.
 
 ## Source
 
-* [`image/Dockerfile`](image/Dockerfile) — the Job A builder image
-* [`.github/workflows/build.yml`](.github/workflows/build.yml) — the Job B client build/release pipeline
+* [`.github/workflows/build.yml`](.github/workflows/build.yml) — the Primary Job client build/release pipeline
+* [`image/Dockerfile`](image/Dockerfile) — the Secondary Job builder image
 
 ## Maintained by
 

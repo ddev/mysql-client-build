@@ -3,8 +3,8 @@
 <!-- Briefly describe the change. If it's a version bump, name old -> new versions. -->
 
 <!-- Which pipeline does this touch? See README.md#how-this-repo-works for the distinction. -->
-- [ ] Job A: the builder image (`image/Dockerfile`, `image/push.sh`, `push-tagged-image.yml`)
-- [ ] Job B: building/releasing the mysql clients (`build.yml`, `build-clients.sh`)
+- [ ] Primary Job: building/releasing the mysql clients (`build.yml`, `build-clients.sh`)
+- [ ] Secondary Job: the builder image (`image/Dockerfile`, `image/push.sh`, `push-tagged-image.yml`)
 - [ ] Other (docs, README, etc.)
 
 ## Why?
@@ -13,7 +13,7 @@
 
 ## Testing
 
-<!-- How did you confirm this works? For Job B changes, confirm the `tests` matrix passes for every affected version/arch. For Job A changes, confirm the builder image still builds and Job B still succeeds against it. -->
+<!-- How did you confirm this works? For Primary Job changes, confirm the `tests` matrix passes for every affected version/arch. For Secondary Job changes, confirm the builder image still builds and the Primary Job still succeeds against it. -->
 
 ## Release notes
 
