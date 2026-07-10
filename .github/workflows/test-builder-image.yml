@@ -1,0 +1,80 @@
+name: Test builder image
+defaults:
+  run:
+    shell: bash
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'image/**'
+      - '.github/workflows/test-builder-image.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'image/**'
+      - '.github/workflows/test-builder-image.yml'
+  workflow_dispatch:
+    inputs:
+      debug_enabled:
+        description: 'Enable debug mode'
+        type: boolean
+        required: false
+        default: false
+
+# A representative, fast-to-build mysql version used only to smoke-test
+# that the builder image can actually compile a client, not just that
+# `docker build` succeeds.
+env:
+  SMOKE_TEST_MYSQL_VERSION: 5.7.44
+
+permissions:
+  contents: read
+
+jobs:
+  test-build:
+    name: build and test image (${{ matrix.arch }})
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
+
+      - name: Build the builder image from source
+        run: |
+          set -eu
+          cd image
+          docker build -t ddev/mysql-client-build:test .
+
+      - name: Download mysql source for the smoke test
+        run: |
+          set -eu
+          curl -L --fail --retry 5 --retry-delay 2 --retry-connrefused \
+            -o /tmp/mysql.tgz \
+            "https://dev.mysql.com/get/Downloads/MySQL-${SMOKE_TEST_MYSQL_VERSION%.?}/mysql-${SMOKE_TEST_MYSQL_VERSION}.tar.gz"
+          mkdir -p "mysql_${SMOKE_TEST_MYSQL_VERSION}"
+          tar -C "mysql_${SMOKE_TEST_MYSQL_VERSION}" --strip-components=1 -zxf /tmp/mysql.tgz
+
+      - name: Compile mysql client through the freshly-built image
+        run: |
+          set -eu
+          cd "mysql_${SMOKE_TEST_MYSQL_VERSION}"
+          docker run --rm --platform="linux/${{ matrix.arch }}" \
+            -e MYSQL_VERSION="${SMOKE_TEST_MYSQL_VERSION}" -e ARCH="${{ matrix.arch }}" \
+            -v .:/src ddev/mysql-client-build:test
+
+      - name: Verify the built binaries report the expected version
+        run: |
+          set -eu
+          BIN="mysql_${SMOKE_TEST_MYSQL_VERSION}/built_${SMOKE_TEST_MYSQL_VERSION}_${{ matrix.arch }}/bin"
+          "${BIN}/mysql" --version
+          "${BIN}/mysqldump" --version
+          "${BIN}/mysql" --version | grep -qF "${SMOKE_TEST_MYSQL_VERSION}"
