@@ -1,6 +1,20 @@
 # ddev/mysql-client-build
 
-This repo builds the `mysql`/`mysqladmin`/`mysqldump` client binaries that DDEV bundles into [`ddev-webserver`](https://github.com/ddev/ddev/tree/main/containers/ddev-webserver), matched by major.minor version to whatever mysql server version a project is configured to use. See [ddev/ddev#6083](https://github.com/ddev/ddev/issues/6083) for the original motivation.
+This repo builds the `mysql`/`mysqladmin`/`mysqldump` client binaries that DDEV bundles into [`ddev-webserver`](https://github.com/ddev/ddev/tree/main/containers/ddev-webserver), matched by major.minor version to whatever mysql server version a project is configured to use.
+
+## Why this repo exists
+
+`ddev-webserver` always shipped with a MariaDB client, even for projects using real Oracle MySQL as their database. That caused real breakage, not just a cosmetic version mismatch: MariaDB's `mariadb-dump` diverged from MySQL's `mysqldump` (most sharply when MariaDB added a "sandbox mode" preamble to dumps that older/other clients can't parse — see [ddev/ddev#6083](https://github.com/ddev/ddev/issues/6083)), and tools like WP-CLI that shell out to `mysql`/`mysqldump` directly on the webserver broke or behaved inconsistently depending on which database type/version a project actually used.
+
+The fix seems obvious — install the matching Oracle MySQL client — but Oracle has never published arm64 packages for MySQL client or server on Debian/Ubuntu (confirmed in #6083; still true). `ddev-webserver` is one multi-arch image (amd64 + arm64, and arm64 is a large share of DDEV's user base on Apple Silicon), so an apt-based install that only covers amd64 wasn't viable. The only remaining path to a working arm64 client, for an arbitrary matching mysql version, was to build it from source — the same approach DDEV already used for `percona-xtrabackup`. That's what this repo does.
+
+## Alternatives worth reconsidering
+
+The reasoning above is from 2024. As of ddev/ddev#8535 (mid-2026), `ddev-dbserver`'s mysql images build `FROM dhi.io/mysql:<version>-dev` — Docker Hardened Images, which *are* genuinely multi-arch and Debian-based. Those images already contain working `mysql`/`mysqladmin`/`mysqldump` binaries at `/opt/mysql/bin/`, dynamically linked against nothing more exotic than `libssl.so.3`, `libcrypto.so.3`, `libtinfo.so.6`, `libstdc++`, `libc`, `libz`, `libzstd`, `libm` — all ordinary Debian package libraries, on the same Debian release `ddev-webserver` itself now uses.
+
+That opens a much simpler alternative that didn't exist when this repo was created: a multi-stage `COPY --from=dhi.io/mysql:<version>-dev /opt/mysql/bin/mysql ...` directly in `ddev-webserver`'s own Dockerfile, pulling the client straight out of the same image the server is built from. Potential upside: no separate build pipeline, no Docker Hub image to maintain, and no client/server version drift at all (ddev/ddev#8575) — the client would always be exactly what the server is, by construction. This hasn't been prototyped or tested; it's worth someone spiking before assuming this whole repo needs to keep existing in its current form.
+
+Two concrete things to check before committing to that path: `dhi.io` requires authentication even to `docker pull` (confirmed directly — an unauthenticated pull returns `unauthorized`), so `ddev-webserver`'s own build/CI would need the same `docker login dhi.io` credentials `ddev-dbserver`'s build already uses, which it doesn't need today. And older mysql versions (5.7 and earlier) and mariadb aren't on DHI at all, so this repo would likely still be needed for those even if the mysql:8.0/8.4 case moved off it.
 
 ## How this repo works
 
@@ -28,7 +42,7 @@ You can also run the build script directly, outside of CI:
 
 [`image/Dockerfile`](image/Dockerfile) defines a plain Debian image with the tools needed to compile the mysql client from source (`build-essential`, `cmake`, etc.). It's pushed to Docker Hub as `ddev/mysql-client-build:latest` and is a reusable compile *environment* that the Primary Job depends on — not something DDEV or end users consume directly.
 
-**This needs attention:** its Debian base has drifted out of sync with `ddev-webserver`'s own base — it should be updated to match and hasn't been. This hasn't caused visible problems so far because binaries linked against an older glibc run fine on a system with an equal-or-newer glibc, but that's a reason it hasn't broken yet, not a reason to leave it as-is. Whether the other libraries the client dynamically links against (`libssl`, `libsasl2`, `libncurses`, `zlib`) stay ABI-compatible across that gap hasn't been explicitly verified either. Bumping `image/Dockerfile`'s base to match is the fix; watch for package name/availability changes when doing so.
+Keep this image's Debian base in sync with `ddev-webserver`'s own base — it had drifted out of sync for a while before being caught and fixed. [`.github/workflows/test-builder-image.yml`](.github/workflows/test-builder-image.yml) now builds this Dockerfile from source and compiles a real mysql client through it on every change, specifically to catch this kind of drift (or any other breakage) before merge instead of relying on manual testing.
 
 This image otherwise changes rarely — mainly when the build environment itself needs something new (a Debian version bump like the one above, an added build dependency), not as part of routine maintenance. To update it:
 

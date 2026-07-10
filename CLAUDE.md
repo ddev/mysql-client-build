@@ -6,7 +6,7 @@ See also [ddev/.github's CLAUDE.md](https://github.com/ddev/.github/blob/main/CL
 
 ## Project Overview
 
-This repo builds the `mysql`/`mysqladmin`/`mysqldump` client binaries that DDEV bundles into `ddev-webserver`, matched by mysql major.minor version to whatever a project is configured to use. See [ddev/ddev#6083](https://github.com/ddev/ddev/issues/6083) for the original motivation. `README.md` has the full explanation below; this file is the condensed, agent-facing version.
+This repo builds the `mysql`/`mysqladmin`/`mysqldump` client binaries that DDEV bundles into `ddev-webserver`, matched by mysql major.minor version to whatever a project is configured to use. See [ddev/ddev#6083](https://github.com/ddev/ddev/issues/6083) for the original motivation: Oracle never shipped arm64 mysql client/server packages for Debian/Ubuntu, so a from-source build was the only way to get a matching arm64 client. `README.md`'s "Why this repo exists" and "Alternatives worth reconsidering" sections have the full history and a concrete newer alternative (copying the client straight out of `ddev-dbserver`'s own `dhi.io/mysql` base image) that hasn't been prototyped yet — read those before assuming this repo's current from-source approach is the only option.
 
 ## How This Repo Works — Two Distinct Pipelines
 
@@ -21,7 +21,7 @@ The Primary Job always pulls `ddev/mysql-client-build:latest`, so a Secondary Jo
 
 - `.github/workflows/build.yml` — Primary Job: the `dbversion`/`arch` test matrix, plus the tag-triggered `release` job
 - `build-clients.sh` — top-level script: downloads mysql source, runs it through the Secondary Job's image
-- `image/Dockerfile` — Secondary Job: the builder image definition (its Debian base is overdue for a bump to match `ddev-webserver`'s current base, see "Known Issues" below)
+- `image/Dockerfile` — Secondary Job: the builder image definition; keep its Debian base in sync with `ddev-webserver`'s current base
 - `image/build-mysql-clients.sh` — the cmake/make invocation run inside the builder image
 - `image/push.sh` — manual Secondary Job build-and-push script
 - `.github/workflows/push-tagged-image.yml` — CI Secondary Job push (`workflow_dispatch`)
@@ -43,6 +43,7 @@ cd image && ./push.sh
 - A new `workflow_dispatch` workflow can't be triggered via `gh workflow run`/the API until it's merged to the default branch (`main`) — GitHub only registers dispatch triggers from the default branch, even if the workflow file is pushed on a feature branch.
 - Docker Hub auth uses the org's 1Password-backed `PUSH_SERVICE_ACCOUNT_TOKEN` secret plus `DOCKER_ORG`/`DOCKERHUB_USERNAME` org vars, shared with this repo from ddev org settings — same pattern `ddev/ddev` uses.
 - Use `actionlint` to validate workflow changes before committing; prefer action versions with declared Node 24 runtime support (e.g. `actions/checkout@v7`, not `@v4`) to avoid the "Node.js 20 is deprecated" warning.
+- `.github/workflows/test-builder-image.yml` builds `image/Dockerfile` from source and compiles a real mysql client through it (not just `docker build`) on any change to `image/**` — this is the only CI coverage of the builder image itself; `build.yml`'s Primary Job only ever pulls the already-published `latest`, never builds from source.
 
 ## Git Workflow
 
@@ -61,6 +62,6 @@ cd image && ./push.sh
 - Release tags follow `vX.Y.Z` (e.g. `v0.2.5`).
 - Consuming side: `ddev/ddev`'s `containers/ddev-webserver/.../mysql-client-install.sh` pins a specific release tag via `TARBALL_VERSION`. Bumping the mysql client version consumed by DDEV requires a change in **both** repos: a Primary Job update + release here, then a `TARBALL_VERSION` bump in `ddev/ddev`.
 
-## Known Issues
+## Possible Future Direction
 
-- **The Secondary Job's builder image is overdue for a Debian version bump.** Its base has drifted out of sync with `ddev-webserver`'s own Debian base — this should have been updated already and hasn't been. glibc's forward compatibility is why it hasn't visibly broken (binaries linked against an older glibc run fine on a newer one), but that's not a reason to leave it out of sync. Whether the other libraries the client dynamically links against (`libssl`, `libsasl2`, `libncurses`, `zlib`) stay ABI-compatible across that gap hasn't been explicitly verified either. Fix: bump `image/Dockerfile`'s base to match `ddev-webserver`'s current Debian base, watching for package name/availability changes.
+`ddev-dbserver`'s mysql images now build `FROM dhi.io/mysql:<version>-dev` (Docker Hardened Images — genuinely multi-arch, Debian-based). Those images already contain working `mysql`/`mysqladmin`/`mysqldump` binaries at `/opt/mysql/bin/`, dynamically linked against only ordinary Debian libraries. A multi-stage `COPY --from=dhi.io/mysql:<version>-dev` directly in `ddev-webserver`'s own Dockerfile could plausibly replace this entire repo's involvement for mysql 8.0/8.4 — no separate build pipeline, no version drift. Not prototyped or tested. `dhi.io` requires authentication even for `docker pull` (confirmed directly), and mysql 5.7/mariadb aren't on DHI, so this repo would likely still be needed for those regardless. See README.md's "Alternatives worth reconsidering" for detail.
