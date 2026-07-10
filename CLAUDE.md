@@ -21,7 +21,7 @@ The Primary Job always pulls `ddev/mysql-client-build:latest`, so a Secondary Jo
 
 - `.github/workflows/build.yml` — Primary Job: the `dbversion`/`arch` test matrix, plus the tag-triggered `release` job
 - `build-clients.sh` — top-level script: downloads mysql source, runs it through the Secondary Job's image
-- `image/Dockerfile` — Secondary Job: the builder image definition (currently `FROM debian:bookworm` — this is overdue for a bump to `debian:trixie`, see "Known Issues" below)
+- `image/Dockerfile` — Secondary Job: the builder image definition (its Debian base is overdue for a bump to match `ddev-webserver`'s current base, see "Known Issues" below)
 - `image/build-mysql-clients.sh` — the cmake/make invocation run inside the builder image
 - `image/push.sh` — manual Secondary Job build-and-push script
 - `.github/workflows/push-tagged-image.yml` — CI Secondary Job push (`workflow_dispatch`)
@@ -63,4 +63,4 @@ cd image && ./push.sh
 
 ## Known Issues
 
-- **The Secondary Job's builder image is overdue for a Debian version bump.** It's still `FROM debian:bookworm`, but `ddev-webserver` (the deployment target) moved to Debian Trixie a while ago — this should have been updated already and hasn't been. glibc's forward compatibility is why it hasn't visibly broken (binaries linked against an older glibc run fine on a newer one), but that's not a reason to leave it on Bookworm. Whether the other libraries the client dynamically links against (`libssl`, `libsasl2`, `libncurses`, `zlib`) stay ABI-compatible from Bookworm into Trixie hasn't been explicitly verified either. Fix: bump `image/Dockerfile` to `debian:trixie`, watching for package name changes (e.g. `libncurses5-dev`).
+- **The Secondary Job's builder image is overdue for a Debian version bump.** Its base has drifted out of sync with `ddev-webserver`'s own Debian base — this should have been updated already and hasn't been. glibc's forward compatibility is why it hasn't visibly broken (binaries linked against an older glibc run fine on a newer one), but that's not a reason to leave it out of sync. Whether the other libraries the client dynamically links against (`libssl`, `libsasl2`, `libncurses`, `zlib`) stay ABI-compatible across that gap hasn't been explicitly verified either. Fix: bump `image/Dockerfile`'s base to match `ddev-webserver`'s current Debian base, watching for package name/availability changes.
