@@ -55,6 +55,7 @@ cd image && ./push.sh
   ```
 
 - `.github/PULL_REQUEST_TEMPLATE.md` asks which pipeline (Primary Job / Secondary Job / Other) a PR touches — fill that in.
+- **ALWAYS write the commit message to a file first and commit with `git commit -F <file>`.** This applies to every commit. Never use `git commit -m "$(cat <<'EOF' ... EOF)"` or any other inline-heredoc-in-`$(...)` construct — it is unreliable in bash and silently fails or mangles the message (missing EOF, stray quotes, chained `&&` breaking mid-heredoc). Write the message with the Write tool (or `cat > /tmp/msg.txt <<'EOF' ... EOF` as its own command), then run `git commit -F /tmp/msg.txt` as a separate command.
 
 ## Versioning
 
