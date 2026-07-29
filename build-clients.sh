@@ -55,7 +55,7 @@ set -x
 docker pull ddev/mysql-client-build
 
 if [ ! -d mysql_${MYSQL_VERSION} ]; then
-  curl -L --fail -o /tmp/mysql.tgz https://dev.mysql.com/get/Downloads/MySQL-${MYSQL_VERSION%.?}/mysql-${MYSQL_VERSION}.tar.gz
+  curl -L --fail -o /tmp/mysql.tgz https://dev.mysql.com/get/Downloads/MySQL-${MYSQL_VERSION%.*}/mysql-${MYSQL_VERSION}.tar.gz
   mkdir -p mysql_${MYSQL_VERSION}
   tar -C mysql_${MYSQL_VERSION} --strip-components=1 -zxf /tmp/mysql.tgz
 fi
