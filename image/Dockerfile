@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y \
     libncurses-dev \
     bison \
     pkg-config \
-    libtirpc-dev
+    libtirpc-dev \
+    libcurl4-openssl-dev
 
 WORKDIR /src
 
